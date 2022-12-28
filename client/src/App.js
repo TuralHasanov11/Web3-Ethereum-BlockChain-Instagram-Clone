@@ -3,9 +3,24 @@ import Main from './components/Main';
 import Navbar from './components/Navbar';
 import { ethers, providers } from 'ethers';
 import DecentragramAbi from './abis/Decentragram.json'
+import { Buffer as Buff } from 'buffer';
 import { create } from 'ipfs-http-client'
+import { FormatTypes, Interface } from 'ethers/lib/utils';
 
-const ipfs = create({ host: 'ipfs.infura.io', port: 5001, protocol: 'https' })
+import "./App.css"
+
+const INFURA_ID = process.env.REACT_APP_INFURA_ID
+const INFURA_SECRET_KEY = process.env.REACT_APP_INFURA_SECRET_KEY
+const auth = 'Basic ' + Buff.from(INFURA_ID + ':' + INFURA_SECRET_KEY).toString('base64')
+const ipfs = create({
+  host: 'ipfs.infura.io', port: 5001, protocol: 'https', headers: {
+    authorization: auth,
+  },
+})
+
+const iface = new Interface(DecentragramAbi["abi"]);
+
+
 
 function App() {
 
@@ -16,48 +31,56 @@ function App() {
   const [images, setImages] = useState([])
   const [buffer, setBuffer] = useState()
 
-  async function loadWeb3() {
+
+  useEffect(() => {
+    loadWeb3()
+
+    return () => { }
+  }, [])
+
+  useEffect(() => {
+    if (provider) {
+      loadBlockChainData()
+    }
+
+    return () => { }
+  }, [provider])
+
+  function loadWeb3() {
     if (window.ethereum) {
       setProvider(new ethers.providers.Web3Provider(window.ethereum))
-      provider.on("network", (newNetwork, oldNetwork) => {
-        if (oldNetwork) {
-          window.location.reload();
-        }
-      });
     } else if (window.web3) {
       setProvider(new providers.Web3Provider(window.web3.currentProvider))
-      provider.on("network", (newNetwork, oldNetwork) => {
-        if (oldNetwork) {
-          window.location.reload();
-        }
-      });
-    } else {
-      window.alert("Non-Ethereum browser. You should consider using MetaMask")
     }
   }
 
   async function loadBlockChainData() {
-    const account = await provider.getSigner()
-    setAccount(account)
+    try {
+      const signer = provider.getSigner()
+      const accounts = await provider?.send("eth_requestAccounts", []);
+      setAccount(accounts[0])
 
-    const networkId = await provider.getNetwork().chainId
-    const networkData = DecentragramAbi.networks[networkId]
+      const networkId = await provider.getNetwork()
+      const networkData = DecentragramAbi.networks["5777"]
 
-    if (networkData) {
-      const contract = ethers.Contract(DecentragramAbi, networkData.address, provider)
-      setDecentragram(contract)
-      const imagesCount = await decentragram.imagesCount()
+      if (networkData) {
+        const contract = new ethers.Contract(networkData.address, iface.format(FormatTypes.full), signer)
+        setDecentragram(contract)
 
-      const imgs = []
-      for (let imgId = 1; imgId < imagesCount; imgId++) {
-        const img = await decentragram.image(imgId)
-        imgs.push(img)
+        const imagesCount = await contract.imagesCount()
+
+        const imgs = []
+        for (let imgId = 1; imgId <= imagesCount.toNumber(); imgId++) {
+          const img = await contract.images(imgId)
+          console.log(img)
+          imgs.push(img)
+        }
+
+        setImages(imgs.sort((a, b) => b.grantAmount - a.grantAmount))
+
       }
-
-      setImages(imgs.sort((a, b) => b.tipAmount - a.tipAmount))
-
-    } else {
-      window.alert("Decentragram content not deployed to current network!")
+    } catch (error) {
+      console.log(error)
     }
   }
 
@@ -69,47 +92,38 @@ function App() {
     reader.readAsArrayBuffer(file)
 
     reader.onload = () => {
-      setBuffer(Buffer(reader.result))
-      console.log('buffer', buffer)
+      const buff = Buff(reader.result)
+      setBuffer(buff)
     }
   }
 
   async function uploadImage(imageDescription) {
-    await ipfs.add(buffer, async (error, result) => {
+    setLoading(true)
+    try {
+      const result = await ipfs.add(buffer)
       console.log("ipfs result", result)
-      if (error) {
-        console.log("ipfs error", error)
-        return
-      }
-
-      setLoading(true)
-      const transaction = await decentragram.uploadImage(result[0].hash, imageDescription)
+      const transaction = await decentragram.uploadImage(result.path, imageDescription, {
+        from: account
+      })
       transaction.wait()
-      setLoading(false)
       window.location.reload(false);
-    })
+    } catch (error) {
+      console.log(error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  async function tipImageOwner(imageId) {
+  async function tipImageOwner(imageId, grantAmount) {
     setLoading(true)
-    const transaction = await decentragram.tipImageOwner(imageId)
+    const transaction = await decentragram.tipImageOwner(imageId.toNumber(), {
+      from: account,
+      value: grantAmount
+    })
     transaction.wait()
-    setLoading(false)
     window.location.reload(false);
   }
 
-  useEffect(() => {
-    async function initBlockChain() {
-      setLoading(true)
-      await loadWeb3()
-      await loadBlockChainData()
-      setLoading(false)
-    }
-
-    initBlockChain()
-
-    return () => { }
-  }, [])
 
 
   return (

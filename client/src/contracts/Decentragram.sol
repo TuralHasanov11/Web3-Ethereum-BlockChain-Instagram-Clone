@@ -7,7 +7,7 @@ contract Decentragram {
         uint id;
         string hash;
         string description;
-        uint tipAmount;
+        uint grantAmount;
         address payable user;
     }
 
@@ -18,7 +18,7 @@ contract Decentragram {
         uint id,
         string hash,
         string description,
-        uint tipAmount,
+        uint grantAmount,
         address payable user
     );
 
@@ -26,7 +26,7 @@ contract Decentragram {
         uint id,
         string hash,
         string description,
-        uint tipAmount,
+        uint grantAmount,
         address payable user
     );
 
@@ -61,15 +61,15 @@ contract Decentragram {
     }
 
     function tipImageOwner(uint _id) public payable {
-        // check balance greater than tip
-
         require(_id > 0 && _id <= imagesCount);
 
         Image memory _image = images[_id];
 
+        require(msg.sender != _image.user);
+
         payable(address(_image.user)).transfer(msg.value);
 
-        _image.tipAmount += msg.value;
+        _image.grantAmount += msg.value;
 
         images[_id] = _image;
 
@@ -77,7 +77,7 @@ contract Decentragram {
             _image.id,
             _image.hash,
             _image.description,
-            _image.tipAmount,
+            _image.grantAmount,
             _image.user
         );
     }

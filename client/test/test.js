@@ -46,7 +46,7 @@ contract('Decentragram', ([deployer, author, tipper]) => {
       assert.equal(event.id.toNumber(), imagesCount.toNumber(), 'event id should be 1')
       assert.equal(event.hash, hash, 'hash should be correct')
       assert.equal(event.description, description, 'description should be correct')
-      assert.equal(event.tipAmount, 0, 'tipAmount should be 0')
+      assert.equal(event.grantAmount, 0, 'Grant Amount should be 0')
       assert.equal(event.user, author, 'user should be author')
 
       await decentragram.uploadImage('', description, { from: author }).should.be.rejected;
@@ -59,27 +59,24 @@ contract('Decentragram', ([deployer, author, tipper]) => {
       assert.equal(image.id.toNumber(), imagesCount.toNumber(), 'image id should be 1')
       assert.equal(image.hash, hash, 'hash should be correct')
       assert.equal(image.description, description, 'description should be correct')
-      assert.equal(image.tipAmount, 0, 'tipAmount should be 0')
+      assert.equal(image.grantAmount, 0, 'Grant Amount should be 0')
       assert.equal(image.user, author, 'user should be author')
     })
 
 
     it('allows users to tip images', async () => {
-      // Track the author balance before purchase
       let oldAuthorBalance
       oldAuthorBalance = await provider.getBalance(author)
 
       result = await decentragram.tipImageOwner(imagesCount, { from: tipper, value: ethers.utils.parseUnits("1.0") })
 
-      // SUCCESS
       const event = result.logs[0].args
       assert.equal(event.id.toNumber(), imagesCount.toNumber(), 'id is correct')
       assert.equal(event.hash, hash, 'Hash is correct')
       assert.equal(event.description, 'description', 'description is correct')
-      assert.equal(event.tipAmount, '1000000000000000000', 'tip amount is correct')
+      assert.equal(event.grantAmount, '1000000000000000000', 'tip amount is correct')
       assert.equal(event.user, author, 'author is correct')
 
-      // Check that author received funds
       let newAuthorBalance
       newAuthorBalance = await provider.getBalance(author)
 
@@ -90,7 +87,6 @@ contract('Decentragram', ([deployer, author, tipper]) => {
 
       assert.equal(newAuthorBalance.toString(), expectedBalance.toString())
 
-      // FAILURE: Tries to tip a image that does not exist
       await decentragram.tipImageOwner(99, { from: tipper, value: ethers.utils.parseUnits("1.0") }).should.be.rejected;
     })
   })
